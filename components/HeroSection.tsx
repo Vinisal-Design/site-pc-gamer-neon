@@ -91,8 +91,15 @@ export default function HeroSection() {
   }, []);
 
   return (
-    <section ref={containerRef} className="relative h-[200vh] w-full md:h-[250vh]">
-      <div className="sticky top-0 h-screen w-full overflow-hidden bg-black">
+    <section
+      ref={containerRef}
+      className="relative w-full"
+      style={{ height: "250vh" }}
+    >
+      <div
+        className="sticky top-0 h-screen w-full overflow-hidden bg-black"
+        style={{ willChange: "transform" }}
+      >
         <video
           ref={videoRef}
           src="/video/build.mp4"

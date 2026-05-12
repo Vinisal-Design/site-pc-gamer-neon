@@ -8,10 +8,15 @@
   --purple: #9B30FF;
 }
 
-html, body {
+html {
   background-color: #000000;
   color: #ffffff;
-  overflow-x: hidden;
+}
+
+body {
+  background-color: #000000;
+  color: #ffffff;
+  overflow-x: clip;
 }
 
 .grid-bg {
