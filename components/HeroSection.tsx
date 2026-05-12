@@ -6,13 +6,17 @@ import {
   motion,
   useMotionValueEvent,
   useScroll,
+  useSpring,
   useTransform,
 } from "framer-motion";
 
 export default function HeroSection() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const targetTimeRef = useRef(0);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const [progressInt, setProgressInt] = useState(0);
 
   const { scrollYProgress } = useScroll({
@@ -20,7 +24,14 @@ export default function HeroSection() {
     offset: ["start start", "end end"],
   });
 
-  const progressScaleX = useTransform(scrollYProgress, [0, 1], [0, 1]);
+  const smoothProgress = useSpring(scrollYProgress, {
+    stiffness: 120,
+    damping: 28,
+    mass: 0.4,
+    restDelta: 0.0005,
+  });
+
+  const progressScaleX = useTransform(smoothProgress, [0, 1], [0, 1]);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -30,36 +41,57 @@ export default function HeroSection() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  useMotionValueEvent(scrollYProgress, "change", (value) => {
-    setProgressInt(Math.round(value * 100));
-    const video = videoRef.current;
-    if (!video || !isDesktop) return;
-    if (!Number.isFinite(video.duration) || video.duration === 0) return;
-    const target = value * video.duration;
-    if (Math.abs(video.currentTime - target) > 0.01) {
-      video.currentTime = target;
-    }
-  });
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    video.muted = true;
+    video.playsInline = true;
+
     if (isDesktop) {
-      video.pause();
       video.removeAttribute("loop");
-      video.muted = true;
+      video.pause();
+      video.currentTime = 0;
     } else {
-      video.muted = true;
       video.loop = true;
-      const playPromise = video.play();
-      if (playPromise) {
-        playPromise.catch(() => {});
-      }
+      const p = video.play();
+      if (p) p.catch(() => {});
     }
-  }, [isDesktop]);
+  }, [isDesktop, videoReady]);
+
+  useMotionValueEvent(smoothProgress, "change", (value) => {
+    setProgressInt(Math.round(value * 100));
+
+    if (!isDesktop) return;
+    const video = videoRef.current;
+    if (!video || !videoReady) return;
+    if (!Number.isFinite(video.duration) || video.duration === 0) return;
+
+    targetTimeRef.current = Math.max(
+      0,
+      Math.min(video.duration - 0.001, value * video.duration)
+    );
+
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const v = videoRef.current;
+      if (!v) return;
+      const diff = Math.abs(v.currentTime - targetTimeRef.current);
+      if (diff > 0.02) {
+        v.currentTime = targetTimeRef.current;
+      }
+    });
+  });
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   return (
-    <section ref={containerRef} className="relative h-[400vh] w-full">
+    <section ref={containerRef} className="relative h-[200vh] w-full md:h-[250vh]">
       <div className="sticky top-0 h-screen w-full overflow-hidden bg-black">
         <video
           ref={videoRef}
@@ -68,7 +100,12 @@ export default function HeroSection() {
           preload="auto"
           playsInline
           muted
+          disablePictureInPicture
+          onLoadedMetadata={() => setVideoReady(true)}
+          onCanPlayThrough={() => setVideoReady(true)}
         />
+
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/40" />
 
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-6 top-6 md:left-10 md:top-10">
@@ -76,7 +113,8 @@ export default function HeroSection() {
               className="glitch font-display uppercase leading-none text-neonCyan"
               style={{
                 fontSize: "clamp(32px, 6vw, 48px)",
-                textShadow: "0 0 16px rgba(0,255,255,0.8), 0 0 32px rgba(0,255,255,0.4)",
+                textShadow:
+                  "0 0 16px rgba(0,255,255,0.8), 0 0 32px rgba(0,255,255,0.4)",
                 letterSpacing: "0.02em",
               }}
             >
@@ -94,7 +132,7 @@ export default function HeroSection() {
           </div>
 
           <AnimatePresence>
-            {progressInt >= 98 && (
+            {progressInt >= 96 && (
               <motion.div
                 key="scroll-cue"
                 initial={{ opacity: 0 }}
@@ -109,13 +147,14 @@ export default function HeroSection() {
             )}
           </AnimatePresence>
 
-          <div className="absolute bottom-0 left-0 h-[2px] w-full bg-black">
+          <div className="absolute bottom-0 left-0 h-[2px] w-full bg-black/60">
             <motion.div
               className="h-full bg-neonCyan"
               style={{
                 scaleX: progressScaleX,
                 transformOrigin: "left",
-                boxShadow: "0 0 12px #00FFFF, 0 0 24px rgba(0,255,255,0.6)",
+                boxShadow:
+                  "0 0 12px #00FFFF, 0 0 24px rgba(0,255,255,0.6)",
               }}
             />
           </div>
